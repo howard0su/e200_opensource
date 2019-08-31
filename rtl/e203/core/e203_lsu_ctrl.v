@@ -257,8 +257,8 @@ module e203_lsu_ctrl(
         ,agu_icb_cmd_addr 
         ,agu_icb_cmd_excl 
       };
-  wire [USR_W-1:0] eai_icb_cmd_usr = {USR_W-1{1'b0}};
-  wire [USR_W-1:0] fpu_icb_cmd_usr = {USR_W-1{1'b0}};
+  wire [USR_W-1:0] eai_icb_cmd_usr = {USR_W{1'b0}};
+  wire [USR_W-1:0] fpu_icb_cmd_usr = {USR_W{1'b0}};
 
   wire [USR_W-1:0]      pre_agu_icb_rsp_usr;
   assign 
@@ -368,8 +368,8 @@ module e203_lsu_ctrl(
 
   assign arbt_bus_icb_cmd_beat =
                            {
-                             1'b0
-                           , 1'b0
+                             2'b0
+                           , 2'b0
                            } ;
 
   assign arbt_bus_icb_cmd_excl =

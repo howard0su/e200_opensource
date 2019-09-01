@@ -51,7 +51,7 @@ vpath %.S $(src_dir)
 	$(RISCV_OBJDUMP) $< > $@
 	$(RISCV_OBJCOPY) $<   $<.verilog
 	sed -i 's/@800/@000/g' $<.verilog
-	sed -i 's/@00002FB8/@00002000/g' $<.verilog
+	sed -i 's/@9000/@0001/g' $<.verilog
 
 %.out: %
 	$(RISCV_SIM) --isa=rv64gc $< 2> $@

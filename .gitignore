@@ -1,5 +1,6 @@
 riscv-tools/prebuilt_tools/prefix/*
 generate_rtl.sh
+generated/
 add_copyright.csh
 rtl/e201
 rtl/e204
@@ -13,3 +14,5 @@ restore.github.vcs
 restore.real
 vsim/e205fd_irq.rc
 vsim/irq.rc
+obj
+results

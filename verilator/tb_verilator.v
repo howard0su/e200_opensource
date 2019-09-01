@@ -35,17 +35,19 @@ module tb_verilator(
   `define CPU_TOP u_e203_soc_top.u_e203_subsys_top.u_e203_subsys_main.u_e203_cpu_top
   `define EXU `CPU_TOP.u_e203_cpu.u_e203_core.u_e203_exu
   `define ITCM `CPU_TOP.u_e203_srams.u_e203_itcm_ram.u_e203_itcm_gnrl_ram.u_sirv_sim_ram
+  `define DTCM `CPU_TOP.u_e203_srams.u_e203_dtcm_ram.u_e203_dtcm_gnrl_ram.u_sirv_sim_ram
 
 
-  `define PC_WRITE_TOHOST       `E203_PC_SIZE'h80000086
+  `define DATA_WRITE_TOHOST       32'h200
+    
   `define PC_EXT_IRQ_BEFOR_MRET `E203_PC_SIZE'h800000a6
   `define PC_SFT_IRQ_BEFOR_MRET `E203_PC_SIZE'h800000be
   `define PC_TMR_IRQ_BEFOR_MRET `E203_PC_SIZE'h800000d6
   `define PC_AFTER_SETMTVEC     `E203_PC_SIZE'h8000015C
 
   wire [`E203_XLEN-1:0] x3 = `EXU.u_e203_exu_regfile.rf_r[3];
-  wire [`E203_PC_SIZE-1:0] pc = `EXU.u_e203_exu_commit.alu_cmt_i_pc;
-  wire [`E203_PC_SIZE-1:0] pc_vld = `EXU.u_e203_exu_commit.alu_cmt_i_valid;
+  wire pc_vld = `EXU.u_e203_exu_commit.alu_cmt_i_valid;
+  wire [`E203_PC_SIZE-1:0] pc = pc_vld?`EXU.u_e203_exu_commit.alu_cmt_i_pc:0;
 
   reg [31:0] pc_write_to_host_cnt;
   reg [31:0] pc_write_to_host_cycle;
@@ -56,10 +58,13 @@ module tb_verilator(
   assign peek_pc = pc_vld?`EXU.u_e203_exu_commit.alu_cmt_i_pc:0;
   assign peek_ir = pc_vld?`EXU.u_e203_exu_commit.alu_cmt_i_instr:0;
 
-  assign peek_mem_write_en = `CPU_TOP.u_e203_srams.u_e203_itcm_ram.we & `CPU_TOP.u_e203_srams.u_e203_itcm_ram.cs;
-  assign peek_mem_write_data = `CPU_TOP.u_e203_srams.u_e203_itcm_ram.din;
-  assign peek_mem_addr = `CPU_TOP.u_e203_srams.u_e203_itcm_ram.addr;
+  assign peek_mem_write_en = `CPU_TOP.u_e203_srams.u_e203_dtcm_ram.we & `CPU_TOP.u_e203_srams.u_e203_dtcm_ram.cs;
+  assign peek_mem_write_data = `CPU_TOP.u_e203_srams.u_e203_dtcm_ram.din;
+  assign peek_mem_addr = `CPU_TOP.u_e203_srams.u_e203_dtcm_ram.addr;
 
+
+  wire itcm_write = `CPU_TOP.u_e203_srams.u_e203_itcm_ram.we & `CPU_TOP.u_e203_srams.u_e203_itcm_ram.cs;
+  wire[`E203_DTCM_RAM_AW-1:0] itcm_addr = `CPU_TOP.u_e203_srams.u_e203_itcm_ram.addr;
   always @(posedge clk or negedge rst_n)
   begin 
     if(rst_n == 1'b0) begin
@@ -67,7 +72,8 @@ module tb_verilator(
         pc_write_to_host_flag <= 1'b0;
         pc_write_to_host_cycle <= 32'b0;
     end
-    else if (pc_vld & (pc == `PC_WRITE_TOHOST)) begin
+    else
+    if (itcm_write) begin
         pc_write_to_host_cnt <= pc_write_to_host_cnt + 1'b1;
         pc_write_to_host_flag <= 1'b1;
         if (pc_write_to_host_flag == 1'b0) begin
@@ -99,112 +105,107 @@ module tb_verilator(
     end
   end
 
-//`ifdef ENABLE_TB_FORCE
-//
-//  // Randomly force the external interrupt
-//  `define EXT_IRQ u_e203_soc_top.u_e203_subsys_top.u_e203_subsys_main.plic_ext_irq
-//  `define SFT_IRQ u_e203_soc_top.u_e203_subsys_top.u_e203_subsys_main.clint_sft_irq
-//  `define TMR_IRQ u_e203_soc_top.u_e203_subsys_top.u_e203_subsys_main.clint_tmr_irq
-//
-//  `define U_CPU u_e203_soc_top.u_e203_subsys_top.u_e203_subsys_main.u_e203_cpu_top.u_e203_cpu
-//  `define ITCM_BUS_ERR `U_CPU.u_e203_itcm_ctrl.sram_icb_rsp_err
-//  `define ITCM_BUS_READ `U_CPU.u_e203_itcm_ctrl.sram_icb_rsp_read
-//  `define STATUS_MIE   `U_CPU.u_e203_core.u_e203_exu.u_e203_exu_commit.u_e203_exu_excp.status_mie_r
-//
-//
-//  wire stop_assert_irq = (pc_write_to_host_cnt > 32);
-//
-//  reg tb_itcm_bus_err;
-//
-//  reg tb_ext_irq;
-//  reg tb_tmr_irq;
-//  reg tb_sft_irq;
-//  initial begin
-//    tb_ext_irq = 1'b0;
-//    tb_tmr_irq = 1'b0;
-//    tb_sft_irq = 1'b0;
-//  end
-//  initial begin
-//    tb_itcm_bus_err = 1'b0;
-//    #100
-//    @(pc == `PC_AFTER_SETMTVEC ) // Wait the program goes out the reset_vector program
-//    forever begin
-//      repeat ($urandom_range(1, 20)) @(posedge clk) tb_itcm_bus_err = 1'b0; // Wait random times
-//      repeat ($urandom_range(1, 200)) @(posedge clk) tb_itcm_bus_err = 1'b1; // Wait random times
-//      if(stop_assert_irq) begin
-//          break;
-//      end
-//    end
-//  end
-//
-//
-//  initial begin
-//    force `EXT_IRQ = tb_ext_irq;
-//    force `SFT_IRQ = tb_sft_irq;
-//    force `TMR_IRQ = tb_tmr_irq;
-//       // We force the bus-error only when:
-//       //   It is in common code, not in exception code, by checking MIE bit
-//       //   It is in read operation, not write, otherwise the test cannot recover
-//    force `ITCM_BUS_ERR = tb_itcm_bus_err
-//                        & `STATUS_MIE 
-//                        & `ITCM_BUS_READ
-//                        ;
-//  end
-//
-//
-//  initial begin
-//    #100
-//    @(pc == `PC_AFTER_SETMTVEC ) // Wait the program goes out the reset_vector program
-//    forever begin
-//      repeat ($urandom_range(1, 1000)) @(posedge clk) tb_ext_irq = 1'b0; // Wait random times
-//      tb_ext_irq = 1'b1; // assert the irq
-//      @((pc == `PC_EXT_IRQ_BEFOR_MRET)) // Wait the program run into the IRQ handler by check PC values
-//      tb_ext_irq = 1'b0;
-//      if(stop_assert_irq) begin
-//          break;
-//      end
-//    end
-//  end
-//
-//  initial begin
-//    #100
-//    @(pc == `PC_AFTER_SETMTVEC ) // Wait the program goes out the reset_vector program
-//    forever begin
-//      repeat ($urandom_range(1, 1000)) @(posedge clk) tb_sft_irq = 1'b0; // Wait random times
-//      tb_sft_irq = 1'b1; // assert the irq
-//      @((pc == `PC_SFT_IRQ_BEFOR_MRET)) // Wait the program run into the IRQ handler by check PC values
-//      tb_sft_irq = 1'b0;
-//      if(stop_assert_irq) begin
-//          break;
-//      end
-//    end
-//  end
-//
-////---->>>>
-//  initial begin
-//    #100
-//    @(pc == `PC_AFTER_SETMTVEC ) // Wait the program goes out the reset_vector program
-//    forever begin
-//      repeat ($urandom_range(1, 1000)) @(posedge clk) tb_tmr_irq = 1'b0; // Wait random times
-//      tb_tmr_irq = 1'b1; // assert the irq
-//      @((pc == `PC_TMR_IRQ_BEFOR_MRET)) // Wait the program run into the IRQ handler by check PC values
-//      tb_tmr_irq = 1'b0;
-//      if(stop_assert_irq) begin
-//          break;
-//      end
-//    end
-//  end
-//
-////  reg cpu_out_of_rst = 1'b0;
-////
-////  always @(posedge clk or negedge rst_n) begin
-////	  if (!rst_n)
-////		  cpu_out_of_rst <= 1'b0;
-////	  else if (pc == `PC_AFTER_SERMTVEC)
-////		  cpu_out_of_rst <= 1'b1;
-////  end
-////<<<<----
-//`endif
+  // Randomly force the external interrupt
+  `define EXT_IRQ u_e200_soc_top.u_e200_subsys_top.u_e200_subsys_main.plic_ext_irq
+  `define SFT_IRQ u_e200_soc_top.u_e200_subsys_top.u_e200_subsys_main.clint_sft_irq
+  `define TMR_IRQ u_e200_soc_top.u_e200_subsys_top.u_e200_subsys_main.clint_tmr_irq
+
+  `define U_CPU u_e200_soc_top.u_e200_subsys_top.u_e200_subsys_main.u_e200_cpu_top.u_e200_cpu
+  `define ITCM_BUS_ERR `U_CPU.u_e200_itcm_ctrl.sram_icb_rsp_err
+  `define ITCM_BUS_READ `U_CPU.u_e200_itcm_ctrl.sram_icb_rsp_read
+  `define STATUS_MIE   `U_CPU.u_e200_core.u_e200_exu.u_e200_exu_commit.u_e200_exu_excp.status_mie_r
+
+  wire stop_assert_irq = (pc_write_to_host_cnt > 32);
+
+  reg tb_itcm_bus_err;
+
+  reg tb_ext_irq;
+  reg tb_tmr_irq;
+  reg tb_sft_irq;
+  initial begin
+    tb_ext_irq = 1'b0;
+    tb_tmr_irq = 1'b0;
+    tb_sft_irq = 1'b0;
+  end
+
+`ifdef ENABLE_TB_FORCE
+  initial begin
+    tb_itcm_bus_err = 1'b0;
+    repeat (pc != `PC_AFTER_SETMTVEC ) begin
+      // Wait the program goes out the reset_vector program
+    end
+    forever begin
+      repeat ($urandom_range(1, 20)) @(posedge clk) tb_itcm_bus_err = 1'b0; // Wait random times
+      repeat ($urandom_range(1, 200)) @(posedge clk) tb_itcm_bus_err = 1'b1; // Wait random times
+      if(stop_assert_irq) begin
+          break;
+      end
+    end
+  end
+
+
+  initial begin
+    force `EXT_IRQ = tb_ext_irq;
+    force `SFT_IRQ = tb_sft_irq;
+    force `TMR_IRQ = tb_tmr_irq;
+       // We force the bus-error only when:
+       //   It is in common code, not in exception code, by checking MIE bit
+       //   It is in read operation, not write, otherwise the test cannot recover
+    force `ITCM_BUS_ERR = tb_itcm_bus_err
+                        & `STATUS_MIE 
+                        & `ITCM_BUS_READ
+                        ;
+  end
+
+
+  initial begin
+    #100
+    repeat (pc != `PC_AFTER_SETMTVEC ) begin
+      // Wait the program goes out the reset_vector program
+    end
+    forever begin
+      repeat ($urandom_range(1, 1000)) @(posedge clk) tb_ext_irq = 1'b0; // Wait random times
+      tb_ext_irq = 1'b1; // assert the irq
+      @((pc == `PC_EXT_IRQ_BEFOR_MRET)) // Wait the program run into the IRQ handler by check PC values
+      tb_ext_irq = 1'b0;
+      if(stop_assert_irq) begin
+          break;
+      end
+    end
+  end
+
+  initial begin
+    #100
+    repeat (pc != `PC_AFTER_SETMTVEC ) begin
+      // Wait the program goes out the reset_vector program
+    end
+    forever begin
+      repeat ($urandom_range(1, 1000)) @(posedge clk) tb_sft_irq = 1'b0; // Wait random times
+      tb_sft_irq = 1'b1; // assert the irq
+      @((pc == `PC_SFT_IRQ_BEFOR_MRET)) // Wait the program run into the IRQ handler by check PC values
+      tb_sft_irq = 1'b0;
+      if(stop_assert_irq) begin
+          break;
+      end
+    end
+  end
+
+  initial begin
+    #100
+    repeat (pc != `PC_AFTER_SETMTVEC ) begin
+      // Wait the program goes out the reset_vector program
+    end
+    forever begin
+      repeat ($urandom_range(1, 1000)) @(posedge clk) tb_tmr_irq = 1'b0; // Wait random times
+      tb_tmr_irq = 1'b1; // assert the irq
+      @((pc == `PC_TMR_IRQ_BEFOR_MRET)) // Wait the program run into the IRQ handler by check PC values
+      tb_tmr_irq = 1'b0;
+      if(stop_assert_irq) begin
+          break;
+      end
+    end
+  end
+`endif
 
   reg[8*64:1] testcase;
 //  integer dumpwave;
@@ -221,10 +222,10 @@ module tb_verilator(
   end
 
   always  @(pc_write_to_host_cnt) begin
-	  if (pc_write_to_host_cnt == 32'd8) begin
-//`ifdef ENABLE_TB_FORCE
-//    @((~tb_tmr_irq) & (~tb_sft_irq) & (~tb_ext_irq)) #10 rst_n <=1;// Wait the interrupt to complete
-//`endif
+	  if (pc_write_to_host_cnt == 32'd20) begin
+`ifdef ENABLE_TB_FORCE
+    @((~tb_tmr_irq) & (~tb_sft_irq) & (~tb_ext_irq)) #10 rst_n <=1;// Wait the interrupt to complete
+`endif
 
         $display("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
         $display("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
@@ -286,34 +287,51 @@ module tb_verilator(
 
 
 
-  integer i;
+    integer i;
 
-    reg [7:0] itcm_mem [0:(`E203_ITCM_RAM_DP*8)-1];
+    reg [7:0] mem [0: (`E203_ITCM_RAM_DP*8) + (`E203_ITCM_RAM_DP*4)-1];
+
     initial begin
-      $readmemh({testcase, ".verilog"}, itcm_mem);
+      $readmemh({testcase, ".verilog"}, mem);
 
       for (i=0;i<(`E203_ITCM_RAM_DP);i=i+1) begin
-          `ITCM.mem_r[i][00+7:00] = itcm_mem[i*8+0];
-          `ITCM.mem_r[i][08+7:08] = itcm_mem[i*8+1];
-          `ITCM.mem_r[i][16+7:16] = itcm_mem[i*8+2];
-          `ITCM.mem_r[i][24+7:24] = itcm_mem[i*8+3];
-          `ITCM.mem_r[i][32+7:32] = itcm_mem[i*8+4];
-          `ITCM.mem_r[i][40+7:40] = itcm_mem[i*8+5];
-          `ITCM.mem_r[i][48+7:48] = itcm_mem[i*8+6];
-          `ITCM.mem_r[i][56+7:56] = itcm_mem[i*8+7];
+          `ITCM.mem_r[i][00+7:00] = mem[i*8+0];
+          `ITCM.mem_r[i][08+7:08] = mem[i*8+1];
+          `ITCM.mem_r[i][16+7:16] = mem[i*8+2];
+          `ITCM.mem_r[i][24+7:24] = mem[i*8+3];
+          `ITCM.mem_r[i][32+7:32] = mem[i*8+4];
+          `ITCM.mem_r[i][40+7:40] = mem[i*8+5];
+          `ITCM.mem_r[i][48+7:48] = mem[i*8+6];
+          `ITCM.mem_r[i][56+7:56] = mem[i*8+7];
       end
 
-        $display("ITCM 0x00: %h", `ITCM.mem_r[8'h00]);
-        $display("ITCM 0x01: %h", `ITCM.mem_r[8'h01]);
-        $display("ITCM 0x02: %h", `ITCM.mem_r[8'h02]);
-        $display("ITCM 0x03: %h", `ITCM.mem_r[8'h03]);
-        $display("ITCM 0x04: %h", `ITCM.mem_r[8'h04]);
-        $display("ITCM 0x05: %h", `ITCM.mem_r[8'h05]);
-        $display("ITCM 0x06: %h", `ITCM.mem_r[8'h06]);
-        $display("ITCM 0x07: %h", `ITCM.mem_r[8'h07]);
-        $display("ITCM 0x16: %h", `ITCM.mem_r[8'h16]);
-        $display("ITCM 0x20: %h", `ITCM.mem_r[8'h20]);
+        $display("ITCM 0x00: %h", `ITCM.mem_r[13'h00]);
+        $display("ITCM 0x01: %h", `ITCM.mem_r[13'h01]);
+        $display("ITCM 0x02: %h", `ITCM.mem_r[13'h02]);
+        $display("ITCM 0x03: %h", `ITCM.mem_r[13'h03]);
+        $display("ITCM 0x04: %h", `ITCM.mem_r[13'h04]);
+        $display("ITCM 0x05: %h", `ITCM.mem_r[13'h05]);
+        $display("ITCM 0x06: %h", `ITCM.mem_r[13'h06]);
+        $display("ITCM 0x07: %h", `ITCM.mem_r[13'h07]);
+        $display("ITCM 0x16: %h", `ITCM.mem_r[13'h16]);
+        $display("ITCM 0x20: %h", `ITCM.mem_r[13'h20]);
 
+      for (i=0;i<(`E203_DTCM_RAM_DP);i=i+1) begin
+          `DTCM.mem_r[i][00+7:00] = mem[(`E203_ITCM_RAM_DP*8) + i*4+0];
+          `DTCM.mem_r[i][08+7:08] = mem[(`E203_ITCM_RAM_DP*8) + i*4+1];
+          `DTCM.mem_r[i][16+7:16] = mem[(`E203_ITCM_RAM_DP*8) + i*4+2];
+          `DTCM.mem_r[i][24+7:24] = mem[(`E203_ITCM_RAM_DP*8) + i*4+3];
+      end
+        $display("DTCM 0x00: %h", `DTCM.mem_r[8'h00]);
+        $display("DTCM 0x01: %h", `DTCM.mem_r[8'h01]);
+        $display("DTCM 0x02: %h", `DTCM.mem_r[8'h02]);
+        $display("DTCM 0x03: %h", `DTCM.mem_r[8'h03]);
+        $display("DTCM 0x04: %h", `DTCM.mem_r[8'h04]);
+        $display("DTCM 0x05: %h", `DTCM.mem_r[8'h05]);
+        $display("DTCM 0x06: %h", `DTCM.mem_r[8'h06]);
+        $display("DTCM 0x07: %h", `DTCM.mem_r[8'h07]);
+        $display("DTCM 0x16: %h", `DTCM.mem_r[8'h16]);
+        $display("DTCM 0x20: %h", `DTCM.mem_r[8'h20]);
     end 
 
 

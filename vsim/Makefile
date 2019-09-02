@@ -27,7 +27,7 @@ install:
 	sed -i "s/E200/${CORE_NAME}/g" ${SIM_DIR}/install/tb/tb_top.v
 	sed -i "s/e200/${core_name}/g" ${SIM_DIR}/install/tb/sim.cpp
 	sed -i "s/E200/${CORE_NAME}/g" ${SIM_DIR}/install/tb/sim.cpp
-	cp ${SIM_DIR}/../rtl/${core_name} ${SIM_DIR}/install/rtl -rf
+	ln -s ${SIM_DIR}/../rtl/${core_name} ${SIM_DIR}/install/rtl
 
 ${RUN_DIR}:
 	mkdir -p ${RUN_DIR}
@@ -82,6 +82,8 @@ regress_collect:
 	@-rm -rf ${RUN_DIR}/regress.res
 	@find ${RUN_DIR} -name "rv32*.log" -exec bin/find_test_fail.csh {} >> ${RUN_DIR}/regress.res \;
 	@cat ${RUN_DIR}/regress.res
+	@echo "FAILED: " `grep FAIL ${RUN_DIR}/regress.res | wc -l`
+	@echo "PASS  : " `grep PASS ${RUN_DIR}/regress.res | wc -l`
 regress: regress_prepare regress_run regress_collect 
 
 clean:

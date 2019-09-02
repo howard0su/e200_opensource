@@ -71,6 +71,7 @@ int main(int argc, char **argv, char **env) {
 #endif
 		simtime++;
 
+#if 1
 		if (top->peek_pc) {
         	printf("%d =\tPC: %08x IR:%08x", cnt, top->peek_pc, top->peek_ir);
 
@@ -80,7 +81,7 @@ int main(int argc, char **argv, char **env) {
 		} else {
 			printf("%d =\tPC: --------    -------- STALL\n", cnt);
 		}
-
+#endif
 		top->clk = 0;
 		top->eval();
 #if VM_TRACE && VCDTRACE

@@ -46,6 +46,8 @@ module tb_top(
   `define PC_AFTER_SETMTVEC     `E203_PC_SIZE'h8000015C
 
   wire [`E203_XLEN-1:0] x3 = `EXU.u_e203_exu_regfile.rf_r[3];
+  wire [`E203_XLEN-1:0] t0 = `EXU.u_e203_exu_regfile.rf_r[5];
+  wire [`E203_XLEN-1:0] t1 = `EXU.u_e203_exu_regfile.rf_r[6];
   wire pc_vld = `EXU.u_e203_exu_commit.alu_cmt_i_valid;
   wire [`E203_PC_SIZE-1:0] pc = pc_vld?`EXU.u_e203_exu_commit.alu_cmt_i_pc:0;
 
@@ -208,6 +210,8 @@ module tb_top(
 `endif
 
   reg[8*200:1] testcase;
+  reg[8*200:1] signature;
+  integer dumpsig;
 //  integer dumpwave;
 
   initial begin
@@ -218,6 +222,16 @@ module tb_top(
     else begin
 	    $fatal(1,"No TESTCASE defined!");
 	    $finish;
+    end
+  end
+
+  initial begin
+    if($value$plusargs("SIGNATURE=%s",signature))begin
+      $display("SIGNATURE=%s",signature);
+      dumpsig = 1;
+    end
+    else begin
+	dumpsig = 0;
     end
   end
 
@@ -237,6 +251,8 @@ module tb_top(
         $display("~~~~~~~~~~The valid Instruction Count: %d ~~~~~~~~~~~~~", valid_ir_cycle);
         $display("~~~~~The test ending reached at cycle: %d ~~~~~~~~~~~~~", pc_write_to_host_cycle);
         $display("~~~~~~~~~~~~~~~The final x3 Reg value: %d ~~~~~~~~~~~~~", x3);
+        $display("~~~~~~~~~~~~~~~The final t0 Reg value: %x ~~~~~~~~~~~~~", t0);
+        $display("~~~~~~~~~~~~~~~The final t1 Reg value: %x ~~~~~~~~~~~~~", t1);
         $display("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
     if (x3 == 1) begin
         $display("~~~~~~~~~~~~~~~~ TEST_PASS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
@@ -259,6 +275,12 @@ module tb_top(
         $display("~~~~~~~~~~#       #    #     #    #     ~~~~~~~~~~~~~~~~");
         $display("~~~~~~~~~~#       #    #     #    ######~~~~~~~~~~~~~~~~");
         $display("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
+    end
+    if (dumpsig) begin
+	    $writememh(signature, 
+		    `DTCM.mem_r, 
+		    (t0 & 20'hFFFFF)/4, 
+		    (t1 & 20'hFFFFF)/4 - 1);
     end
     $finish;
     end

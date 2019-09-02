@@ -22,8 +22,11 @@ all: run_test
 install: 
 	mkdir -p ${SIM_DIR}/install/tb
 	cp ${SIM_DIR}/../tb/tb_top.v ${SIM_DIR}/install/tb/ -rf
+	cp ${SIM_DIR}/../tb/sim.cpp ${SIM_DIR}/install/tb/ -rf
 	sed -i "s/e200/${core_name}/g" ${SIM_DIR}/install/tb/tb_top.v
 	sed -i "s/E200/${CORE_NAME}/g" ${SIM_DIR}/install/tb/tb_top.v
+	sed -i "s/e200/${core_name}/g" ${SIM_DIR}/install/tb/sim.cpp
+	sed -i "s/E200/${CORE_NAME}/g" ${SIM_DIR}/install/tb/sim.cpp
 	cp ${SIM_DIR}/../rtl/${core_name} ${SIM_DIR}/install/rtl -rf
 
 ${RUN_DIR}:
